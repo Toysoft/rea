@@ -3,6 +3,7 @@ import { expect, it, onTestFinished } from "vitest";
 
 import type { AdbDeviceAnalysisPort } from "../../../src/application/adb/AdbDeviceAnalysisPort.js";
 import { createAnalysisExecution } from "../../../src/application/AnalysisProvider.js";
+import { ADB_TOOL_CONTRACTS } from "../../../src/contracts/adb/adbToolContracts.js";
 import { parseEvidence } from "../../../src/domain/evidence.js";
 import { ok } from "../../../src/domain/result.js";
 import { createServer } from "../../../src/server/createServer.js";
@@ -336,32 +337,7 @@ it("advertises exact valid ADB schemas and records inline evidence through MCP",
 
   const { tools } = await client.listTools();
   const names = tools.map((tool) => tool.name);
-  const operationNames = [
-    "inspect_adb_client",
-    "list_adb_devices",
-    "inspect_adb_device",
-    "list_adb_packages",
-    "pull_adb_package",
-    "read_adb_logcat",
-    "inspect_adb_package",
-    "pull_adb_file",
-    "push_adb_file",
-    "capture_adb_screen",
-    "list_adb_processes",
-    "list_adb_directory",
-    "list_adb_features",
-    "list_adb_services",
-    "inspect_adb_display",
-    "inspect_adb_window",
-    "read_adb_setting",
-    "collect_adb_bugreport",
-    "resolve_adb_packages",
-    "install_adb_package",
-    "uninstall_adb_package",
-    "start_adb_app",
-    "start_adb_activity",
-    "stop_adb_app",
-  ] as const;
+  const operationNames = ADB_TOOL_CONTRACTS.map(({ name }) => name);
   for (const name of operationNames) expect(names, name).toContain(name);
 
   assertAdvertisedMcpContracts(operationNames, tools);
