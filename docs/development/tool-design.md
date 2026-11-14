@@ -483,7 +483,11 @@ the application layer.
 
 CLI commands register through
 [`cliCommandRegistrations.ts`](https://github.com/morluto/rea/blob/main/src/cli/cliCommandRegistrations.ts):
-add the registrar to its family there and its module to `src/cli.ts`. The build
+add the registrar to its family there and its module to `src/cli.ts`. A public
+tool reaches the CLI through the command named after it or an alias declared in
+[`toolCliReachability.ts`](https://github.com/morluto/rea/blob/main/src/contracts/toolCliReachability.ts);
+a tool without a command declares its MCP-only reason there. Each contract
+carries the result as `cliReachability`. The build
 records which registrar defines each top-level command, and a one-shot command
 loads only that registrar's module graph; help, completions, `--llms` and unknown
 names load the complete CLI. A registrar's command definitions must not depend

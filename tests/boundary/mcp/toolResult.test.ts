@@ -75,6 +75,7 @@ const contract: ToolContract = {
     openWorldHint: false,
   },
   returnsTargetContent: false,
+  cliReachability: { mcpOnlyReason: "Fixture contract without a CLI command." },
   examples: [{ title: "Example fixture request", input: {} }],
 };
 
