@@ -42,27 +42,13 @@ function expectStrictInputSchemaParity(
   ajv: Ajv2020,
 ): void {
   const advertised = new Map(tools.map((tool) => [tool.name, tool]));
-  const names = [
-    "inspect_managed_artifact",
-    "inspect_managed_members",
-    "inspect_managed_native_boundaries",
-    "list_browser_targets",
-    "open_binary",
-    "close_binary",
-    "binary_session",
-    "find_changed_behavior",
-    "build_call_path",
-    "record_unknown",
-    "update_unknown",
-  ];
-  for (const name of names) {
-    const contract = TOOL_CONTRACTS.find(
-      ({ name: toolName }) => toolName === name,
-    );
+  for (const contract of TOOL_CONTRACTS) {
+    const { name } = contract;
+    const example = contract.examples[0];
+    // Without an example there is no valid request to extend.
+    if (example === undefined) continue;
     const tool = advertised.get(name);
-    const example = contract?.examples[0];
-    if (contract === undefined || tool === undefined || example === undefined)
-      throw new Error(`${name} did not have an advertised example`);
+    if (tool === undefined) throw new Error(`${name} was not advertised`);
     const malformed = { ...example.input, __unexpected_root_key__: true };
     expect(contract.inputSchema.safeParse(malformed).success, name).toBe(false);
     expect(ajv.compile(tool.inputSchema)(malformed), name).toBe(false);

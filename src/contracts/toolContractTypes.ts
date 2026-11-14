@@ -1,6 +1,7 @@
 import type { z } from "zod";
 
 import type { JsonValue } from "../domain/jsonValue.js";
+import type { ToolCliReachability } from "./toolCliReachability.js";
 import type { DerivedToolAnnotations, ToolEffects } from "./toolEffects.js";
 
 /** One validated example request for an MCP tool contract. */
@@ -62,5 +63,7 @@ export interface ToolContract<
    * analysis target. MCP delivery marks such results as untrusted data.
    */
   readonly returnsTargetContent: boolean;
+  /** One-shot CLI commands that reach this tool, or why only MCP serves it. */
+  readonly cliReachability: ToolCliReachability;
   readonly examples: readonly ToolExample[];
 }

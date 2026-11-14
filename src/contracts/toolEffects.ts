@@ -1,3 +1,5 @@
+import { toolCliReachability } from "./toolCliReachability.js";
+
 /** Possible effects across a tool's supported inputs, including temporary work. */
 export interface ToolEffects {
   readonly mutatesTarget: boolean;
@@ -1002,5 +1004,6 @@ export const toolContractMetadata = (name: string) => {
     effects: audited,
     annotations: annotationsFromEffects(audited),
     returnsTargetContent: toolReturnsTargetContent(name),
+    cliReachability: toolCliReachability(name),
   };
 };

@@ -45,6 +45,9 @@ describe("target-content provenance audit", () => {
     ).toEqual([...TARGET_CONTENT_FREE_TOOLS].sort());
   });
 
+  // An independent sample of tools whose results can carry target, provider or
+  // device text, including error-path-only cases. Deriving it from the
+  // exception set would only restate the audit it guards.
   it.each([
     "procedure_pseudo_code",
     "list_strings",
