@@ -28,7 +28,6 @@ import {
 import {
   clientEvidencePaths,
   clientOwnershipEvidencePaths,
-  compactInputSchemaByDefault,
   manualRegistrationRemediation,
   supportedClients,
 } from "./SupportedClients.js";
@@ -336,19 +335,28 @@ export const readClientRegistrationInspections = async (
         });
         continue;
       }
-      const registrationEnvironment =
-        compactInputSchemaByDefault(client) || client.name === "codex"
-          ? await clientRegistrationEnvironmentDetailsWithBudget(
-              parsed,
-              client,
-              {},
-              "effective",
-              client.name === "kimi" || client.name === "codex"
-                ? options.resolveProviderRequestBudget
-                : undefined,
-              options.platform,
-            )
-          : undefined;
+      // This read validates every recorded setting and supplies the timeout facts for the
+      // clients that carry their own. Dropping the profile requirement does not drop it.
+      const validatesRecordedSettings =
+        client.name === "codex" ||
+        client.name === "kimi" ||
+        client.name === "lm_studio";
+      // Only the clients with a timeout recommendation of their own need the provider budget
+      // resolved; asking for it otherwise can fail a registration whose settings are valid.
+      const readsProviderBudget =
+        client.name === "codex" || client.name === "kimi";
+      const registrationEnvironment = validatesRecordedSettings
+        ? await clientRegistrationEnvironmentDetailsWithBudget(
+            parsed,
+            client,
+            {},
+            "effective",
+            readsProviderBudget
+              ? options.resolveProviderRequestBudget
+              : undefined,
+            options.platform,
+          )
+        : undefined;
       if (
         registrationEnvironment !== undefined &&
         !registrationEnvironment.ok
@@ -375,12 +383,6 @@ export const readClientRegistrationInspections = async (
             registration,
             client: effectiveClient,
             commandFacts,
-            inputSchemaProfileSelected:
-              registrationEnvironment?.ok === true &&
-              snapshotEnvironment(
-                registrationEnvironment.value.values,
-                options.platform,
-              ).REA_MCP_INPUT_SCHEMA_PROFILE !== undefined,
           });
       record(
         configuredStatus(
@@ -510,12 +512,10 @@ const registrationAligned = ({
   registration,
   client,
   commandFacts,
-  inputSchemaProfileSelected,
 }: {
   readonly registration: ClientRegistration;
   readonly client: SetupClient;
   readonly commandFacts: ClientRegistrationCommandFacts;
-  readonly inputSchemaProfileSelected: boolean;
 }): "aligned" | "stale" | "unknown" => {
   const { identity } = commandFacts;
   if (identity === "unknown") return "unknown";
@@ -536,8 +536,6 @@ const registrationAligned = ({
     (registration.startupTimeoutMs === undefined ||
       registration.toolTimeoutMs === undefined)
   )
-    return "stale";
-  if (compactInputSchemaByDefault(client) && !inputSchemaProfileSelected)
     return "stale";
   // Native transport is admitted separately; the Harness route must name REA.
   if (client.format === "dsh" && registration.serverName !== "rea")
