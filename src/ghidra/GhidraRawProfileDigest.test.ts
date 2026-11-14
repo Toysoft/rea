@@ -1,20 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { parseConfig } from "../config/parseConfig.js";
+import {
+  createAnalysisProfile,
+  type AnalysisProfileCommitment,
+} from "../domain/analysisProfile.js";
 import type { BinaryTarget } from "../domain/binaryTargetTypes.js";
 import { silentLogger } from "../logger.js";
 import { ghidraProfileInstallationHost as host } from "./GhidraInstallation.fixture.js";
 import { GhidraProvider } from "./GhidraProvider.js";
-
-// Digests commit to the current shared policy, including the instruction
-// status, load-image relocation-symbol, procedure search, byte-search and
-// bit-field base-type, runtime value-flow budgets, function-boundary and inventory-search revisions that prevent reuse of snapshots with earlier
-// results.
-const RAW_DIGESTS = {
-  "6502": "6c4e88435526e8f0907b072600e3b121577962a36554e023dde4cf85113dd9f6",
-  "x86-disabled-analyzer":
-    "b2dc33d1932cbe71d72819428634927f3a2d8a2bbd54b6893f823ccb6b795d0b",
-} as const;
 
 const configFor = (environment: NodeJS.ProcessEnv) => {
   const parsed = parseConfig({ GHIDRA_INSTALL_DIR: "/ghidra", ...environment });
@@ -34,13 +28,56 @@ const raw = (architecture: "6502" | "x86", entryPoint: string): BinaryTarget =>
     entryPointSource: entryPoint,
   }) as unknown as BinaryTarget;
 
+const resolveProfile = async (
+  environment: NodeJS.ProcessEnv,
+  target: BinaryTarget,
+): Promise<AnalysisProfileCommitment> => {
+  const ghidra = new GhidraProvider(
+    configFor(environment),
+    silentLogger,
+    {},
+    host,
+  );
+  const resolved = await ghidra.resolveAnalysisProfile(target);
+  if (!resolved.ok) throw resolved.error;
+  const { profile } = resolved.value;
+  if (profile === null) throw new Error("Ghidra committed no raw profile");
+  return profile;
+};
+
+/**
+ * Snapshots with earlier results stay reusable unless the digest changes, so
+ * bumping any committed `-v<N>` policy revision must change it.
+ */
+const expectDigestCommitsEachRevision = ({
+  provider,
+  parameters,
+  digest,
+}: AnalysisProfileCommitment): void => {
+  expect(createAnalysisProfile(provider, parameters).digest).toBe(digest);
+  const revisions = Object.entries(parameters).flatMap(([key, value]) =>
+    typeof value === "string" && /-v\d+$/u.test(value) ? [{ key, value }] : [],
+  );
+  expect(revisions).not.toHaveLength(0);
+  for (const { key, value } of revisions) {
+    const bumped = value.replace(
+      /-v(\d+)$/u,
+      (_revision, number: string) => `-v${Number(number) + 1}`,
+    );
+    expect(
+      createAnalysisProfile(provider, { ...parameters, [key]: bumped }).digest,
+      key,
+    ).not.toBe(digest);
+  }
+};
+
 describe("raw-binary analysis profile digest", () => {
   it("commits the 6502 raw profile to the current shared policy", async () => {
-    const ghidra = new GhidraProvider(configFor({}), silentLogger, {}, host);
-    const resolved = await ghidra.resolveAnalysisProfile(raw("6502", "0x8001"));
-    if (!resolved.ok) throw resolved.error;
-    expect(resolved.value.profile?.digest).toBe(RAW_DIGESTS["6502"]);
-    expect(resolved.value.profile?.parameters).toMatchObject({
+    const target = raw("6502", "0x8001");
+    const profile = await resolveProfile({}, target);
+    expect((await resolveProfile({}, target)).digest).toBe(profile.digest);
+    expectDigestCommitsEachRevision(profile);
+    expect(profile.parameters).toMatchObject({
       target_format: "raw-binary",
       loader: "BinaryLoader",
       language_id: "6502:LE:16:default",
@@ -61,21 +98,18 @@ describe("raw-binary analysis profile digest", () => {
     });
   });
 
-  it("keeps the disabled-analyzer raw digest and its analysis options", async () => {
-    const ghidra = new GhidraProvider(
-      configFor({
-        REA_GHIDRA_DISABLED_ANALYZERS: "Aggressive Instruction Finder",
-      }),
-      silentLogger,
-      {},
-      host,
+  it("commits disabled analyzers to the raw digest and its analysis options", async () => {
+    const environment = {
+      REA_GHIDRA_DISABLED_ANALYZERS: "Aggressive Instruction Finder",
+    };
+    const target = raw("x86", "0x1000");
+    const profile = await resolveProfile(environment, target);
+    expect((await resolveProfile(environment, target)).digest).toBe(
+      profile.digest,
     );
-    const resolved = await ghidra.resolveAnalysisProfile(raw("x86", "0x1000"));
-    if (!resolved.ok) throw resolved.error;
-    expect(resolved.value.profile?.digest).toBe(
-      RAW_DIGESTS["x86-disabled-analyzer"],
-    );
-    expect(resolved.value.profile?.parameters).toMatchObject({
+    expect((await resolveProfile({}, target)).digest).not.toBe(profile.digest);
+    expectDigestCommitsEachRevision(profile);
+    expect(profile.parameters).toMatchObject({
       inventory_search_projection: "provider-inventory-facts-v1",
       value_flow_effect_scope: "pcode-load-store-explicit-v1",
       native_value_flow_projection: "accepted-runtime-budgets-v1",
